@@ -36,7 +36,7 @@ public class Main : SingletonMonoBehaviour<Main> {
 	override protected void Initialise() {
 		UpdateScreenDimensions();
 
-		serverInfo = string.Format("Sending: {0}:{1}\nReceiving: {2}", Settings.ipAddress, Settings.port, Settings.listenPort);
+		serverInfo = string.Format("发送: {0}:{1}\n接收: {2}", Settings.ipAddress, Settings.port, Settings.listenPort);
 
 		tuioTransmitter = new TUIOTransmitter(Settings.ipAddress, Settings.port);
 		tuioTransmitter.Connect();

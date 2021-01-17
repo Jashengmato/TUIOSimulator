@@ -139,6 +139,11 @@ namespace TouchScript.InputSources
             }
         }
 
+        public MouseHandler.FakeCursorGesture FakeGestureType
+        {
+            get { return mouseHandler.FakeGesture; }
+        }
+
         #endregion
 
         #region Private variables
@@ -187,6 +192,9 @@ namespace TouchScript.InputSources
         [SerializeField]
         private bool emulateSecondMousePointer = true;
 
+        [SerializeField]
+        private MouseHandler.FakeCursorGesture fakeGestureType ;
+
         private MouseHandler mouseHandler;
         private TouchHandler touchHandler;
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
@@ -202,6 +210,8 @@ namespace TouchScript.InputSources
         public override bool UpdateInput()
         {
             if (base.UpdateInput()) return true;
+
+            fakeGestureType = mouseHandler.FakeGesture;
 
             var handled = false;
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR

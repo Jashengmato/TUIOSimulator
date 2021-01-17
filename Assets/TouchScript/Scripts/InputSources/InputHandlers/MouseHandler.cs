@@ -3,6 +3,8 @@
  */
 
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using TouchScript.Pointers;
 using TouchScript.Utils;
 using UnityEngine;
@@ -39,6 +41,26 @@ namespace TouchScript.InputSources.InputHandlers
             StationaryFake
         }
 
+        public enum FakeCursorGesture
+        {
+            /// <summary>
+            /// 无手势
+            /// </summary>
+            Null = 0,
+            /// <summary>
+            /// 虚拟点静止
+            /// </summary>
+            Stationary = 1,
+            /// <summary>
+            /// 虚拟点缩放动态
+            /// </summary>
+            Zoom = 2,
+            /// <summary>
+            /// 虚拟点平移动态
+            /// </summary>
+            Pan = 3,
+        }
+
         #endregion
 
         #region Public properties
@@ -62,6 +84,11 @@ namespace TouchScript.InputSources.InputHandlers
             }
         }
 
+        public FakeCursorGesture FakeGesture
+        {
+            get { return fakeGesture; }
+        }
+
         #endregion
 
         #region Private variables
@@ -76,10 +103,37 @@ namespace TouchScript.InputSources.InputHandlers
         private PointerDelegate cancelPointer;
 
         private State state;
+        private FakeCursorGesture fakeGesture = FakeCursorGesture.Null;
         private ObjectPool<MousePointer> mousePool;
         private MousePointer mousePointer, fakeMousePointer;
         private Vector3 mousePointPos = Vector3.zero;
 
+        /// <summary>
+        /// 虚拟点初始按下位置
+        /// </summary>
+        private Vector2 mouseInitPos = Vector2.zero;
+        /// <summary>
+        /// 虚拟点与第二鼠标点位置差
+        /// </summary>
+        private Vector2 mousePosOffset = Vector2.zero;
+        /// <summary>
+        /// 虚拟点与第二鼠标点中心位置
+        /// </summary>
+        private Vector2 mouseInitCenter = Vector2.zero;
+
+        private List<KeyCode> gestureToKeyCodeMapper = new List<KeyCode>()
+        {
+            KeyCode.LeftAlt,
+            KeyCode.LeftShift,
+            KeyCode.LeftControl,
+        };
+
+        private List<KeyCode> validKeys = new List<KeyCode>()
+        {
+            KeyCode.LeftAlt,
+            KeyCode.LeftShift,
+            KeyCode.LeftControl,
+        };
         #endregion
 
         /// <summary>
@@ -165,9 +219,11 @@ namespace TouchScript.InputSources.InputHandlers
                 switch (state)
                 {
                     case State.Mouse:
-                        if (Input.GetKeyDown(KeyCode.LeftAlt) && !Input.GetKeyUp(KeyCode.LeftAlt)
+                        FakeCursorGesture gesture;
+                        if (CheckValidKeyDown(out gesture)
                             && ((newButtons & Pointer.PointerButtonState.AnyButtonPressed) == 0))
                         {
+                            fakeGesture = gesture;
                             stateWaitingForFake();
                         }
                         else
@@ -176,11 +232,15 @@ namespace TouchScript.InputSources.InputHandlers
                         }
                         break;
                     case State.WaitingForFake:
-                        if (Input.GetKey(KeyCode.LeftAlt))
+                        if (CheckValidKeyState())
                         {
                             if ((newButtons & Pointer.PointerButtonState.AnyButtonDown) != 0)
                             {
                                 // A button is down while holding Alt
+
+                                mouseInitPos = pos;
+                                //Debug.Log("Set: mouseInitPos: "+ mouseInitPos.ToString());
+
                                 fakeMousePointer = internalAddPointer(pos, newButtons, mousePointer.Flags | Pointer.FLAG_ARTIFICIAL);
                                 pressPointer(fakeMousePointer);
                                 stateMouseAndFake();
@@ -188,6 +248,7 @@ namespace TouchScript.InputSources.InputHandlers
                         }
                         else
                         {
+                            fakeGesture = FakeCursorGesture.Null;
                             stateMouse();
                         }
                         break;
@@ -200,6 +261,7 @@ namespace TouchScript.InputSources.InputHandlers
                         {
                             if (mousePointPos != pos)
                             {
+                                mouseInitPos = pos;
                                 fakeMousePointer.Position = remappedPos;
                                 updatePointer(fakeMousePointer);
                             }
@@ -216,11 +278,52 @@ namespace TouchScript.InputSources.InputHandlers
                         }
                         break;
                     case State.StationaryFake:
-                        if (buttons != newButtons) updateButtons(buttons, newButtons);
+                        if (buttons != newButtons)
+                        {
+                            updateButtons(buttons, newButtons);
+                        }
+
+                        if ((newButtons & Pointer.PointerButtonState.AnyButtonDown) != 0)
+                        {
+                            //  Calc Center Pos And Offset
+                            Vector2 mousePos = new Vector2(pos.x, pos.y);
+                            mouseInitCenter = (mouseInitPos + mousePos) / 2;
+                            mousePosOffset = mousePos - mouseInitPos;
+
+                            //Debug.LogFormat("Calc Center Pos And Offset: mousePos: {0}.\n mouseInitPos: {1}, mouseInitCenter: {2}, mousePosOffset: {3}",
+                            //    pos, mouseInitPos, mouseInitCenter, mousePosOffset);
+                        }
+
+                        if((newButtons & Pointer.PointerButtonState.AnyButtonPressed) != 0)
+                        {
+                            switch(fakeGesture)
+                            {
+                                case FakeCursorGesture.Stationary:
+                                    //  虚拟点静态
+                                    break;
+
+                                case FakeCursorGesture.Pan:
+                                    //  虚拟点平移
+                                    fakeMousePointer.Position = new Vector2(pos.x, pos.y) - mousePosOffset;
+                                    updatePointer(fakeMousePointer);
+                                    break;
+
+                                case FakeCursorGesture.Zoom:
+                                    //  虚拟点缩放
+                                    Vector2 mousePos = new Vector2(pos.x, pos.y);
+                                    Vector2 offset = mousePos - mouseInitCenter;
+
+                                    fakeMousePointer.Position = mouseInitCenter - offset;
+                                    updatePointer(fakeMousePointer);
+                                    break;
+                            }
+                        }
+
                         if (fakeTouchReleased())
                         {
                             stateMouse();
                         }
+
                         break;
                 }
             }
@@ -235,6 +338,29 @@ namespace TouchScript.InputSources.InputHandlers
 
             mousePointPos = pos;
             return updated;
+        }
+
+        bool CheckValidKeyDown(out FakeCursorGesture gesture)
+        {
+            for(int i=0; i!=validKeys.Count; i++)
+            {
+                if(Input.GetKeyDown(validKeys[i]) && !Input.GetKeyUp(validKeys[i]))
+                {
+                    gesture = (FakeCursorGesture)(i + 1);
+                    return true;
+                }
+            }
+
+            gesture = FakeCursorGesture.Null;
+            return false;
+        }
+
+        bool CheckValidKeyState()
+        {
+            if (fakeGesture == FakeCursorGesture.Null)
+                return true;
+
+            return Input.GetKey(gestureToKeyCodeMapper[(int)fakeGesture-1]);
         }
 
         /// <inheritdoc />
@@ -356,9 +482,10 @@ namespace TouchScript.InputSources.InputHandlers
 
         private bool fakeTouchReleased()
         {
-            if (!Input.GetKey(KeyCode.LeftAlt))
+            if (!CheckValidKeyState())
             {
                 // Alt is released, need to kill the fake touch
+                fakeGesture = FakeCursorGesture.Null;
                 fakeMousePointer.Buttons = PointerUtils.UpPressedButtons(fakeMousePointer.Buttons); // Convert current pressed buttons to UP
                 releasePointer(fakeMousePointer);
                 removePointer(fakeMousePointer);

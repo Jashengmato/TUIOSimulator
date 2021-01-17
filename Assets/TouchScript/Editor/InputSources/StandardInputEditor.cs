@@ -17,6 +17,7 @@ namespace TouchScript.Editor.InputSources
         public static readonly GUIContent TEXT_WEBGL_HEADER = new GUIContent("WebGL", "WebGL specific settings.");
 
         public static readonly GUIContent TEXT_EMULATE_MOUSE = new GUIContent("Emulate Second Mouse Pointer", "If selected, you can press ALT to make a stationary mouse pointer. This is used to simulate multi-touch.");
+        public static readonly GUIContent TEXT_FAKE_GESTURE = new GUIContent("Fake Gesture", "Fake Gesture Type.");
 
         public static readonly GUIContent TEXT_WINDOWS_API = new GUIContent("Select which touch API to use:\n - Windows 8 — new WM_POINTER API,\n - Windows 7 — old WM_TOUCH API,\n - Unity — Unity's WM_TOUCH implementation,\n - None — no touch.");
         public static readonly GUIContent TEXT_WINDOWS8 = new GUIContent("Windows 8+ API");
@@ -30,7 +31,7 @@ namespace TouchScript.Editor.InputSources
         private SerializedProperty basicEditor;
 
         private SerializedProperty windows8Touch, windows7Touch, webGLTouch, windows8Mouse,
-                                   windows7Mouse, universalWindowsMouse, emulateSecondMousePointer;
+                                   windows7Mouse, universalWindowsMouse, emulateSecondMousePointer, fakeGestureType;
 
         private SerializedProperty generalProps, windowsProps, webglProps;
 
@@ -49,6 +50,7 @@ namespace TouchScript.Editor.InputSources
             windows7Mouse = serializedObject.FindProperty("windows7Mouse");
             universalWindowsMouse = serializedObject.FindProperty("universalWindowsMouse");
             emulateSecondMousePointer = serializedObject.FindProperty("emulateSecondMousePointer");
+            fakeGestureType = serializedObject.FindProperty("fakeGestureType");
 
             generalProps = serializedObject.FindProperty("generalProps");
             windowsProps = serializedObject.FindProperty("windowsProps");
@@ -97,12 +99,19 @@ namespace TouchScript.Editor.InputSources
             if (display)
             {
                 EditorGUI.indentLevel++;
+
                 EditorGUI.BeginChangeCheck();
                 EditorGUILayout.PropertyField(emulateSecondMousePointer, TEXT_EMULATE_MOUSE);
                 if (EditorGUI.EndChangeCheck())
                 {
                     instance.EmulateSecondMousePointer = emulateSecondMousePointer.boolValue;
                 }
+
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(TEXT_FAKE_GESTURE.text);
+                EditorGUILayout.EnumPopup(instance.FakeGestureType);
+                GUILayout.EndHorizontal();
+
                 EditorGUI.indentLevel--;
             }
         }
